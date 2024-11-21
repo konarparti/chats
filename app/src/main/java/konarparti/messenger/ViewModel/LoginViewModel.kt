@@ -1,7 +1,5 @@
 package konarparti.messenger.ViewModel
 
-import android.annotation.SuppressLint
-import android.app.Application
 import androidx.lifecycle.viewModelScope
 import konarparti.messenger.Web.LoginRequest
 import konarparti.messenger.Web.RetrofitInstance
@@ -11,7 +9,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import konarparti.messenger.MainActivity
 import konarparti.messenger.Web.SharedPreferencesHelper
@@ -43,6 +40,13 @@ class LoginViewModel(private val tokenManager: TokenManager, application: MainAc
                 else
                     _uiState.value = LoginUiState.Error("Server error")
             }
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch{
+            tokenManager.clearToken()
+            SharedPreferencesHelper.clearToken(context)
         }
     }
 }

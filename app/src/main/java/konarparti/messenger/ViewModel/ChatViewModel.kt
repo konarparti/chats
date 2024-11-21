@@ -36,5 +36,8 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             }
         }
     }
+    fun resetState() {
+        _chatListState.value = ChatsState.Loading
+    }
 }
 

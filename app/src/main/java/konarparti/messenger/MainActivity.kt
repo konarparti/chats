@@ -2,7 +2,9 @@ package konarparti.messenger
 
 import android.os.Bundle
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DismissValue
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwipeToDismiss
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -31,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -56,11 +61,22 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
             val viewModel = LoginViewModel(tokenManager, this)
+            val chatViewModel = ChatViewModel(this)
 
             val startDestination = if (SharedPreferencesHelper.getToken(context) != null) {
                 "chatList"
             } else {
                 "login"
+            }
+
+            BackHandler(enabled = true) {
+                if (navController.currentBackStackEntry?.destination?.route == "chatList") {
+                    viewModel.logout()
+                    chatViewModel.resetState();
+                    navController.navigate("login") {}
+                } else {
+                    navController.popBackStack()
+                }
             }
 
             NavHost(navController = navController, startDestination) {
@@ -72,7 +88,6 @@ class MainActivity : ComponentActivity() {
                     })
                 }
                 composable("chatList") {
-                    val chatViewModel = ChatViewModel(context)
                     LaunchedEffect(Unit) {
                         chatViewModel.loadChats()
                     }
@@ -151,15 +166,25 @@ fun ChatListScreen(viewModel: ChatViewModel) {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.chats.size) { index ->
                     val chat = state.chats[index]
-                    Text(
-                        text = chat,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                // Логика выбора чата
-                            }
-                            .padding(8.dp)
-                    )
+                    Row {
+                        Text(
+                            text = chat,
+                            fontSize = 20.sp,
+                            modifier = Modifier
+                                .weight(9f)
+                                .clickable {
+                                    // Логика выбора чата
+                                }
+                                .padding(8.dp)
+
+                        )
+                        Button(onClick = {}, modifier = Modifier.padding(8.dp, 0.dp))
+                        {
+                            Text("Open")
+
+                        }
+                    }
+
                 }
             }
         }
@@ -168,6 +193,7 @@ fun ChatListScreen(viewModel: ChatViewModel) {
             Text("Error: ${state.message}")
         }
     }
+
 }
 
 
