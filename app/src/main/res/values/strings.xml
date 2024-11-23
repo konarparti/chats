@@ -3,4 +3,7 @@
     <string name="something_goes_wrong">Something goes wrong</string>
     <string name="no_data_available">No data available</string>
     <string name="thumb">https://faerytea.name:8008/thumb/%1$s</string>
+    <string name="img">https://faerytea.name:8008/img/%1$s</string>
+    <string name="thumb_mode">thumb</string>
+    <string name="img_mode">img</string>
 </resources>

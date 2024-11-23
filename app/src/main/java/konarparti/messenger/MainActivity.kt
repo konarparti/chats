@@ -1,6 +1,8 @@
 package konarparti.messenger
 
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DismissValue
@@ -26,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismiss
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -110,11 +114,22 @@ class MainActivity : ComponentActivity() {
                     val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
                     val messagesViewModel = MessagesViewModel(chatId, context)
                     //LaunchedEffect(Unit) {
-                        messagesViewModel.fetchMessages({})
+                    messagesViewModel.fetchMessages({})
                     //}
-                    MessagesScreen(viewModel = messagesViewModel)
+                    MessagesScreen(viewModel = messagesViewModel, onImageClick = { imageUrl ->
+                        navController.navigate("imageView/${Uri.encode(imageUrl)}")
+                    })
                 }
-
+                composable(
+                    route = "imageView/{imageUrl}",
+                    arguments = listOf(navArgument("imageUrl") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val imageUrl =
+                        backStackEntry.arguments?.getString("imageUrl") ?: return@composable
+                    ImageViewScreen(
+                        imageUrl = imageUrl,
+                        onBackPressed = { navController.popBackStack() })
+                }
             }
         }
     }
@@ -211,8 +226,9 @@ fun ChatListScreen(viewModel: ChatViewModel, onChatClick: (id: String) -> Unit) 
 }
 
 @Composable
-fun MessagesScreen(viewModel: MessagesViewModel) {
+fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit) {
     val messagesState by viewModel.messagesState.collectAsState()
+    val listState = rememberLazyListState()
 
     when (messagesState) {
         is ChatListState.Loading -> {
@@ -232,7 +248,8 @@ fun MessagesScreen(viewModel: MessagesViewModel) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp)
+                    .padding(8.dp),
+                state = listState
             ) {
                 items(chatInfo.messages.size) { index ->
                     val message = chatInfo.messages[index]
@@ -257,7 +274,13 @@ fun MessagesScreen(viewModel: MessagesViewModel) {
                             )
                         } else if (message.data.Image != null) {
                             GlideImage(
-                                url = message.data.Image.link)
+                                url = message.data.Image.link,
+                                modifier = Modifier
+                                    .height(200.dp)
+                                    .clickable {
+                                        onImageClick(message.data.Image.link)
+                                    },
+                                "thumb")
                         }
                     }
                 }
@@ -279,6 +302,24 @@ fun MessagesScreen(viewModel: MessagesViewModel) {
     }
 }
 
+@Composable
+fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {
+    BackHandler(onBack = onBackPressed)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        GlideImage(
+            url = imageUrl,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            "img"
+        )
+    }
+}
 
 
 //@Composable
@@ -325,38 +366,43 @@ fun MessagesScreen(viewModel: MessagesViewModel) {
 //    }
 //}
 
-@Composable
-fun ChatScreen(messages: List<Message>, onMessageSend: (String) -> Unit) {
-    Column {
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(messages.size) { index ->
-                val message = messages[index]
-                when {
-                    message.text != null -> Text(message.text)
-                    message.imageLink != null -> GlideImage(message.imageLink)
-                }
-            }
-        }
-        TextField(
-            value = "",
-            onValueChange = { /* handle input */ },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(onClick = { onMessageSend("Your Message") }) {
-            Text("Send")
-        }
-    }
-}
+//@Composable
+//fun ChatScreen(messages: List<Message>, onMessageSend: (String) -> Unit) {
+//    Column {
+//        LazyColumn(modifier = Modifier.weight(1f)) {
+//            items(messages.size) { index ->
+//                val message = messages[index]
+//                when {
+//                    message.text != null -> Text(message.text)
+//                    message.imageLink != null -> GlideImage(message.imageLink, )
+//                }
+//            }
+//        }
+//        TextField(
+//            value = "",
+//            onValueChange = { /* handle input */ },
+//            modifier = Modifier.fillMaxWidth()
+//        )
+//        Button(onClick = { onMessageSend("Your Message") }) {
+//            Text("Send")
+//        }
+//    }
+//}
 
 @Composable
-fun GlideImage(url: String) {
+fun GlideImage(url: String, modifier: Modifier = Modifier, mode: String) {
     AndroidView(
         factory = { context ->
             ImageView(context).apply {
-                Glide.with(context).load(context.getString(R.string.thumb, url)).into(this)
+                if(mode == context.getString(R.string.thumb_mode))
+                    Glide.with(context).load(context.getString(R.string.thumb, url))
+                        .into(this)
+                else if ( mode == context.getString(R.string.img_mode))
+                    Glide.with(context).load(context.getString(R.string.img, url))
+                        .into(this)
             }
         },
-        modifier = Modifier.height(200.dp)
+        modifier = modifier
     )
 }
 
