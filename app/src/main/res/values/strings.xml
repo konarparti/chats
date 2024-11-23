@@ -2,4 +2,5 @@
     <string name="app_name">messenger</string>
     <string name="something_goes_wrong">Something goes wrong</string>
     <string name="no_data_available">No data available</string>
+    <string name="thumb">https://faerytea.name:8008/thumb/%1$s</string>
 </resources>

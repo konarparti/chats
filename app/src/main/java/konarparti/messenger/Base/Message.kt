@@ -1,25 +1,28 @@
 package konarparti.messenger.Base
 
-import android.graphics.Bitmap
+import com.squareup.moshi.JsonClass
 
+@JsonClass(generateAdapter = true)
 data class Message(
+    val id: Int,
     val from: String,
     val to: String,
     val data: Data,
     val time: String,
-    val id: Long? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class Data(
     val Image: Image? = null,
     val Text: Text? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class Image(
     val link: String = "",
-    var bitmap: Bitmap? = null,
 )
 
+@JsonClass(generateAdapter = true)
 data class Text(
     val text: String = "",
 )
