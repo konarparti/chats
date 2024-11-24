@@ -2,6 +2,7 @@ package konarparti.messenger.Web
 
 
 import konarparti.messenger.Base.Message
+import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -15,7 +16,8 @@ interface ApiService {
     suspend fun getMessages(
         @Path("channelName") channelName: String,
         @Query("lastKnownId") lastKnownId: Int = 0,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 100,
+        @Query("reverse") reverse: Boolean = false
     ): List<Message>
 
     @POST("/login")
@@ -30,4 +32,11 @@ interface ApiService {
         @Header("X-Auth-Token") token: String,
         @Body request: String,
     )
+
+    @POST("/messages")
+    @Headers("Content-Type: application/json;charset=UTF-8")
+    suspend fun sendMessage(
+        @Header("X-Auth-Token") token: String,
+        @Body message: Message
+    ): Response<Int>
 }

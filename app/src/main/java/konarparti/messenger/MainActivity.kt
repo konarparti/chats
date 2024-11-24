@@ -1,5 +1,6 @@
 package konarparti.messenger
 
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
@@ -36,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -60,8 +63,10 @@ import konarparti.messenger.ViewModel.ChatViewModel
 import konarparti.messenger.ViewModel.LoginUiState
 import konarparti.messenger.ViewModel.LoginViewModel
 import konarparti.messenger.ViewModel.MessagesViewModel
+import konarparti.messenger.Web.RetrofitInstance
 import konarparti.messenger.Web.SharedPreferencesHelper
 import konarparti.messenger.Web.TokenManager
+import kotlinx.coroutines.launch
 
 
 class MainActivity : ComponentActivity() {
@@ -69,11 +74,12 @@ class MainActivity : ComponentActivity() {
         val context = this
         super.onCreate(savedInstanceState)
         val tokenManager = TokenManager(this)
+        RetrofitInstance.initialize(this)
 
         setContent {
             val navController = rememberNavController()
-            val viewModel = LoginViewModel(tokenManager, this)
-            val chatViewModel = ChatViewModel(this)
+            val viewModel = LoginViewModel(tokenManager, context)
+            val chatViewModel = ChatViewModel(context)
 
             val startDestination = if (SharedPreferencesHelper.getToken(context) != null) {
                 "chatList"
@@ -103,32 +109,35 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) {
                         chatViewModel.loadChats()
                     }
-                    ChatListScreen(viewModel = chatViewModel, onChatClick = {
-                        chatId -> navController.navigate("messages/$chatId")
+                    ChatListScreen(viewModel = chatViewModel, onChatClick = { chatId ->
+                        navController.navigate("messages/$chatId/0")
                     })
                 }
                 composable(
-                    route = "messages/{chatId}",
-                    arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+                    route = "messages/{chatId}/{lastKnownId}",
+                    arguments = listOf(
+                        navArgument("chatId") { type = NavType.StringType },
+                        navArgument("lastKnownId") { type = NavType.IntType }
+                    )
                 ) { backStackEntry ->
                     val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+                    val lastKnownId = backStackEntry.arguments?.getInt("lastKnownId") ?: 0
                     val messagesViewModel = MessagesViewModel(chatId, context)
-                    //LaunchedEffect(Unit) {
-                    messagesViewModel.fetchMessages({})
-                    //}
-                    MessagesScreen(viewModel = messagesViewModel, onImageClick = { imageUrl ->
-                        navController.navigate("imageView/${Uri.encode(imageUrl)}")
-                    })
+
+                    MessagesScreen(
+                        viewModel = messagesViewModel,
+                        onImageClick = { imageUrl ->
+                            navController.navigate("imageView/${Uri.encode(imageUrl)}")
+                        }
+                    )
                 }
+
                 composable(
                     route = "imageView/{imageUrl}",
                     arguments = listOf(navArgument("imageUrl") { type = NavType.StringType })
                 ) { backStackEntry ->
-                    val imageUrl =
-                        backStackEntry.arguments?.getString("imageUrl") ?: return@composable
-                    ImageViewScreen(
-                        imageUrl = imageUrl,
-                        onBackPressed = { navController.popBackStack() })
+                    val imageUrl = backStackEntry.arguments?.getString("imageUrl") ?: return@composable
+                    ImageViewScreen(imageUrl = imageUrl, onBackPressed = { navController.popBackStack() })
                 }
             }
         }
@@ -229,12 +238,33 @@ fun ChatListScreen(viewModel: ChatViewModel, onChatClick: (id: String) -> Unit) 
 fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit) {
     val messagesState by viewModel.messagesState.collectAsState()
     val listState = rememberLazyListState()
+    var messageText by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+
+    // Отслеживаем прокрутку и загружаем старые сообщения
+    val firstVisibleItemIndex = listState.firstVisibleItemIndex
+    val totalItemsCount = listState.layoutInfo.totalItemsCount
+
+    LaunchedEffect(messagesState) {
+        // Прокручиваем список до последнего сообщения после загрузки
+        if (messagesState is ChatListState.Success) {
+            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
+        }
+    }
+
+    LaunchedEffect(firstVisibleItemIndex) {
+        // Подгружаем более старые сообщения, если пользователь прокручивает в верхнюю часть списка
+        if (firstVisibleItemIndex <= 1 && totalItemsCount > 0) {
+            val firstVisibleMessage = viewModel.getFirstVisibleMessageId()
+            viewModel.loadMoreMessages(firstVisibleMessage) {}
+
+        }
+    }
 
     when (messagesState) {
         is ChatListState.Loading -> {
             Box(
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
@@ -245,51 +275,79 @@ fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit)
         }
         is ChatListState.Success -> {
             val chatInfo = (messagesState as ChatListState.Success).chatInfo
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(8.dp),
-                state = listState
+                    .padding(8.dp)
             ) {
-                items(chatInfo.messages.size) { index ->
-                    val message = chatInfo.messages[index]
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp)
-                    ) {
-                        // Имя отправителя
-                        Text(
-                            text = "${message.from}:",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        // Текст сообщения или изображение
-                        if (message.data.Text != null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(8.dp),
+                    state = listState
+                ) {
+                    items(chatInfo.messages.size) { index ->
+                        val message = chatInfo.messages[index]
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(8.dp)
+                        ) {
                             Text(
-                                text = message.data.Text.text,
-                                style = MaterialTheme.typography.bodyMedium
+                                text = "${message.from}:",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyLarge
                             )
-                        } else if (message.data.Image != null) {
-                            GlideImage(
-                                url = message.data.Image.link,
-                                modifier = Modifier
-                                    .height(200.dp)
-                                    .clickable {
-                                        onImageClick(message.data.Image.link)
-                                    },
-                                "thumb")
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            if (message.data.Text != null) {
+                                Text(
+                                    text = message.data.Text.text,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            } else if (message.data.Image != null) {
+                                GlideImage(
+                                    url = message.data.Image.link,
+                                    modifier = Modifier
+                                        .height(200.dp)
+                                        .clickable {
+                                            onImageClick(message.data.Image.link)
+                                        },
+                                    "thumb"
+                                )
+                            }
                         }
+                    }
+                }
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextField(
+                        value = messageText,
+                        onValueChange = { messageText = it },
+                        placeholder = { Text("Type a message...") },
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
+                    )
+                    Button(onClick = {
+                        if (messageText.isNotBlank()) {
+                            coroutineScope.launch {
+                                viewModel.sendMessage(messageText, from = "konarparti")
+                                messageText = "" // Очистка поля после отправки
+                            }
+                        }
+                    }) {
+                        Text("Send")
                     }
                 }
             }
         }
         is ChatListState.Error -> {
             Box(
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -301,6 +359,11 @@ fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit)
         }
     }
 }
+
+
+
+
+
 
 @Composable
 fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {

@@ -8,10 +8,21 @@ import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
 import android.content.Context
+import android.util.Log
 import androidx.room.Room
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.runBlocking
+import okhttp3.Request
 
 
 object RetrofitInstance {
+    private lateinit var tokenManager: TokenManager
+
+    fun initialize(context: Context) {
+        tokenManager = TokenManager(context)
+        Log.d("token", "TokenManager initialized")
+    }
+
     private const val BASE_URL = "https://faerytea.name:8008/"
 
     val api: ApiService by lazy {
