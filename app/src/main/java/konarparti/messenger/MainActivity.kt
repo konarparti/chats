@@ -1,11 +1,10 @@
 package konarparti.messenger
 
+import android.content.Context
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.widget.ImageView
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -20,24 +19,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DismissValue
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SwipeToDismiss
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,15 +49,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.bumptech.glide.Glide
-import konarparti.messenger.DAL.Message
 import konarparti.messenger.States.ChatListState
 import konarparti.messenger.States.ChatsState
 import konarparti.messenger.ViewModel.ChatViewModel
@@ -71,78 +69,308 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        val context = this
         super.onCreate(savedInstanceState)
-        val tokenManager = TokenManager(this)
-        RetrofitInstance.initialize(this)
 
         setContent {
-            val navController = rememberNavController()
-            val viewModel = LoginViewModel(tokenManager, context)
-            val chatViewModel = ChatViewModel(context)
+            val tokenManager = remember { TokenManager(this) }
+            val loginViewModel = remember { LoginViewModel(tokenManager, this) }
+            val chatViewModel = remember { ChatViewModel(this) }
+            var isLoggedIn by rememberSaveable { mutableStateOf(SharedPreferencesHelper.getToken(this) != null) }
+            var selectedChatId by rememberSaveable { mutableStateOf<String?>(null) }
+            val context = this
 
-            val startDestination = if (SharedPreferencesHelper.getToken(context) != null) {
-                "chatList"
-            } else {
-                "login"
-            }
-
-            BackHandler(enabled = true) {
-                if (navController.currentBackStackEntry?.destination?.route == "chatList") {
-                    viewModel.logout()
-                    chatViewModel.resetState();
-                    navController.navigate("login") {}
+            MaterialTheme {
+                if (!isLoggedIn) {
+                    LoginScreen(viewModel = loginViewModel) {
+                        isLoggedIn = true
+                        chatViewModel.loadChats()
+                    }
                 } else {
-                    navController.popBackStack()
-                }
-            }
-
-            NavHost(navController = navController, startDestination) {
-                composable("login") {
-                    LoginScreen(viewModel, onLoginSuccess = {
-                        navController.navigate("chatList") {
-                            popUpTo("login") { inclusive = true }
-                        }
-                    })
-                }
-                composable("chatList") {
                     LaunchedEffect(Unit) {
                         chatViewModel.loadChats()
                     }
-                    ChatListScreen(viewModel = chatViewModel, onChatClick = { chatId ->
-                        navController.navigate("messages/$chatId/0")
-                    })
-                }
-                composable(
-                    route = "messages/{chatId}/{lastKnownId}",
-                    arguments = listOf(
-                        navArgument("chatId") { type = NavType.StringType },
-                        navArgument("lastKnownId") { type = NavType.IntType }
-                    )
-                ) { backStackEntry ->
-                    val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
-                    val lastKnownId = backStackEntry.arguments?.getInt("lastKnownId") ?: 0
-                    val messagesViewModel = MessagesViewModel(chatId, context)
+                    val chatListState = chatViewModel.chatListState.collectAsState()
 
-                    MessagesScreen(
-                        viewModel = messagesViewModel,
-                        onImageClick = { imageUrl ->
-                            navController.navigate("imageView/${Uri.encode(imageUrl)}")
+                    BackHandler(enabled = true) {
+                        when {
+                            selectedChatId != null -> {
+                                selectedChatId = null
+                            }
+                            else -> {
+                                loginViewModel.logout()
+                                chatViewModel.resetState()
+                                SharedPreferencesHelper.clearToken(context)
+                                isLoggedIn = false
+                            }
+                        }
+                    }
+
+                    ResponsiveChatScreen(
+                        chatListState = chatListState.value,
+                        selectedChatId = selectedChatId,
+                        onChatSelected = { chatId ->
+                            selectedChatId = chatId
+                        },
+                        context = context,
+                        onBack = {
+                            selectedChatId = null
                         }
                     )
-                }
-
-                composable(
-                    route = "imageView/{imageUrl}",
-                    arguments = listOf(navArgument("imageUrl") { type = NavType.StringType })
-                ) { backStackEntry ->
-                    val imageUrl = backStackEntry.arguments?.getString("imageUrl") ?: return@composable
-                    ImageViewScreen(imageUrl = imageUrl, onBackPressed = { navController.popBackStack() })
                 }
             }
         }
     }
 }
+
+@Composable
+fun ResponsiveChatScreen(
+    chatListState: ChatsState,
+    selectedChatId: String?,
+    onChatSelected: (String) -> Unit,
+    context: Context,
+    onBack: () -> Unit
+) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    if (isLandscape) {
+        Row(Modifier.fillMaxSize()) {
+            ChatListScreen(
+                chatListState = chatListState,
+                modifier = Modifier.width(300.dp),
+                onChatClick = onChatSelected
+            )
+            if (selectedChatId != null) {
+                ChatDetailScreen(chatId = selectedChatId, modifier = Modifier.weight(1f), context)
+            } else {
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text("Выберите чат", style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
+    } else {
+        if (selectedChatId == null) {
+            ChatListScreen(
+                chatListState = chatListState,
+                modifier = Modifier.fillMaxSize(),
+                onChatClick = onChatSelected
+            )
+        } else {
+            ChatDetailScreen(
+                chatId = selectedChatId,
+                modifier = Modifier.fillMaxSize(),
+                context,
+                onBack = onBack
+            )
+        }
+    }
+}
+
+@Composable
+fun ChatListScreen(
+    chatListState: ChatsState,
+    modifier: Modifier = Modifier,
+    onChatClick: (String) -> Unit
+) {
+    when (chatListState) {
+        is ChatsState.Loading -> {
+            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        is ChatsState.Success -> {
+            LazyColumn(modifier) {
+                items(chatListState.chats.size) { index ->
+                    val chat = chatListState.chats[index]
+                    Text(
+                        text = chat,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onChatClick(chat) }
+                            .padding(16.dp),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+        is ChatsState.Error -> {
+            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Ошибка: ${chatListState.message}", color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatDetailScreen(
+    chatId: String,
+    modifier: Modifier = Modifier,
+    context: Context,
+    onBack: (() -> Unit)? = null
+) {
+    val messagesViewModel = remember(chatId) { MessagesViewModel(chatId, context) }
+    val messagesState by messagesViewModel.messagesState.collectAsState()
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+    var imageUrlToShow by remember { mutableStateOf<String?>(null) }
+    var isImageLoading by remember { mutableStateOf(false) }
+
+    LaunchedEffect(chatId) {
+        messagesViewModel.getFirstVisibleMessageId()
+    }
+
+    LaunchedEffect(messagesState) {
+        if (messagesState is ChatListState.Success) {
+            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
+        }
+    }
+
+
+//    val firstVisibleItemIndex = listState.firstVisibleItemIndex
+//    val totalItemsCount = listState.layoutInfo.totalItemsCount
+//    LaunchedEffect(listState.firstVisibleItemIndex) {
+//        if (firstVisibleItemIndex <= 3 && totalItemsCount > 0) {
+//            val currentState = messagesState
+//            if (currentState is ChatListState.Success) {
+//                val firstVisibleMessageId = currentState.chatInfo.messages[firstVisibleItemIndex].id
+//                val currentScrollOffset = listState.firstVisibleItemScrollOffset
+//
+//                messagesViewModel.loadMoreMessages(firstVisibleMessageId) {
+//                    coroutineScope.launch {
+//                        val newIndex = listState.firstVisibleItemIndex
+//                        listState.scrollToItem(newIndex, currentScrollOffset)
+//                    }
+//                }
+//            }
+//        }
+//    }
+
+    BackHandler(enabled = true) {
+        if (imageUrlToShow != null) {
+            imageUrlToShow = null
+        } else {
+            onBack?.invoke()
+        }
+    }
+
+    if (imageUrlToShow != null) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (isImageLoading) {
+                CircularProgressIndicator()
+            }
+            GlideImage(
+                url = imageUrlToShow!!,
+                modifier = Modifier.fillMaxSize(),
+                mode = "img",
+            )
+        }
+    } else {
+        Column(modifier) {
+            Text(
+                text = "Чат: $chatId",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Divider()
+
+            when (messagesState) {
+                is ChatListState.Loading -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                is ChatListState.Success -> {
+                    val messages = (messagesState as ChatListState.Success).chatInfo.messages
+                    LazyColumn(
+                        state = listState,
+                        reverseLayout = false,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        items(messages.size) { index ->
+                            val message = messages[index]
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = "${message.from}:",
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                if (message.data.Text != null) {
+                                    Text(
+                                        text = message.data.Text.text,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                } else if (message.data.Image != null) {
+                                    GlideImage(
+                                        url = message.data.Image.link,
+                                        modifier = Modifier
+                                            .height(200.dp)
+                                            .clickable {
+                                                imageUrlToShow = message.data.Image.link
+                                            },
+                                        "thumb"
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    ChatInputField(onMessageSend = { text ->
+                        coroutineScope.launch {
+                            messagesViewModel.sendMessage(text, "konarparti")
+
+                        }
+                    })
+                }
+                is ChatListState.Error -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = "Ошибка загрузки сообщений",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatInputField(onMessageSend: (String) -> Unit) {
+    var text by remember { mutableStateOf("") }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        TextField(
+            value = text,
+            onValueChange = { text = it },
+            placeholder = { Text("Введите сообщение...") },
+            modifier = Modifier.weight(1f)
+        )
+        Button(
+            onClick = {
+                if (text.isNotBlank()) {
+                    onMessageSend(text)
+                    text = ""
+                }
+            },
+            modifier = Modifier.padding(start = 8.dp)
+        ) {
+            Text("Отправить")
+        }
+    }
+}
+
+
+//***
 
 @Composable
 fun LoginScreen(
@@ -196,175 +424,175 @@ fun LoginScreen(
     }
 }
 
-@Composable
-fun ChatListScreen(viewModel: ChatViewModel, onChatClick: (id: String) -> Unit) {
-    val chatListState = viewModel.chatListState.collectAsState()
-
-    when (val state = chatListState.value) {
-        is ChatsState.Loading -> {
-            CircularProgressIndicator()
-        }
-        is ChatsState.Success -> {
-            // Отображаем список чатов
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.chats.size) { index ->
-                    val chat = state.chats[index]
-                    Row {
-                        Text(
-                            text = chat,
-                            fontSize = 20.sp,
-                            modifier = Modifier
-                                .weight(9f)
-                                .clickable {
-                                    onChatClick(chat)
-                                }
-                                .padding(8.dp)
-
-                        )
-                    }
-
-                }
-            }
-        }
-        is ChatsState.Error -> {
-            // Ошибка при получении чатов
-            Text("Error: ${state.message}")
-        }
-    }
-
-}
-
-@Composable
-fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit) {
-    val messagesState by viewModel.messagesState.collectAsState()
-    val listState = rememberLazyListState()
-    var messageText by remember { mutableStateOf("") }
-    val coroutineScope = rememberCoroutineScope()
-
-    // Отслеживаем прокрутку и загружаем старые сообщения
-    val firstVisibleItemIndex = listState.firstVisibleItemIndex
-    val totalItemsCount = listState.layoutInfo.totalItemsCount
-
-    LaunchedEffect(messagesState) {
-        // Прокручиваем список до последнего сообщения после загрузки
-        if (messagesState is ChatListState.Success) {
-            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
-        }
-    }
-
-    LaunchedEffect(firstVisibleItemIndex) {
-        // Подгружаем более старые сообщения, если пользователь прокручивает в верхнюю часть списка
-        if (firstVisibleItemIndex <= 1 && totalItemsCount > 0) {
-            val firstVisibleMessage = viewModel.getFirstVisibleMessageId()
-            viewModel.loadMoreMessages(firstVisibleMessage) {}
-
-        }
-    }
-
-    when (messagesState) {
-        is ChatListState.Loading -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(40.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        is ChatListState.Success -> {
-            val chatInfo = (messagesState as ChatListState.Success).chatInfo
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(8.dp)
-            ) {
-                LazyColumn(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(8.dp),
-                    state = listState
-                ) {
-                    items(chatInfo.messages.size) { index ->
-                        val message = chatInfo.messages[index]
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(8.dp)
-                        ) {
-                            Text(
-                                text = "${message.from}:",
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            if (message.data.Text != null) {
-                                Text(
-                                    text = message.data.Text.text,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            } else if (message.data.Image != null) {
-                                GlideImage(
-                                    url = message.data.Image.link,
-                                    modifier = Modifier
-                                        .height(200.dp)
-                                        .clickable {
-                                            onImageClick(message.data.Image.link)
-                                        },
-                                    "thumb"
-                                )
-                            }
-                        }
-                    }
-                }
-                Divider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextField(
-                        value = messageText,
-                        onValueChange = { messageText = it },
-                        placeholder = { Text("Type a message...") },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
-                    )
-                    Button(onClick = {
-                        if (messageText.isNotBlank()) {
-                            coroutineScope.launch {
-                                viewModel.sendMessage(messageText, from = "konarparti")
-                                messageText = "" // Очистка поля после отправки
-                            }
-                        }
-                    }) {
-                        Text("Send")
-                    }
-                }
-            }
-        }
-        is ChatListState.Error -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Error: ${(messagesState as ChatListState.Error).message}",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-        }
-    }
-}
-
-
-
-
-
-
+//@Composable
+//fun ChatListScreen(viewModel: ChatViewModel, onChatClick: (id: String) -> Unit) {
+//    val chatListState = viewModel.chatListState.collectAsState()
+//
+//    when (val state = chatListState.value) {
+//        is ChatsState.Loading -> {
+//            CircularProgressIndicator()
+//        }
+//        is ChatsState.Success -> {
+//            // Отображаем список чатов
+//            LazyColumn(modifier = Modifier.fillMaxSize()) {
+//                items(state.chats.size) { index ->
+//                    val chat = state.chats[index]
+//                    Row {
+//                        Text(
+//                            text = chat,
+//                            fontSize = 20.sp,
+//                            modifier = Modifier
+//                                .weight(9f)
+//                                .clickable {
+//                                    onChatClick(chat)
+//                                }
+//                                .padding(8.dp)
+//
+//                        )
+//                    }
+//
+//                }
+//            }
+//        }
+//        is ChatsState.Error -> {
+//            // Ошибка при получении чатов
+//            Text("Error: ${state.message}")
+//        }
+//    }
+//
+//}
+//
+//@Composable
+//fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit) {
+//    val messagesState by viewModel.messagesState.collectAsState()
+//    val listState = rememberLazyListState()
+//    var messageText by remember { mutableStateOf("") }
+//    val coroutineScope = rememberCoroutineScope()
+//
+//    // Отслеживаем прокрутку и загружаем старые сообщения
+//    val firstVisibleItemIndex = listState.firstVisibleItemIndex
+//    val totalItemsCount = listState.layoutInfo.totalItemsCount
+//
+//    LaunchedEffect(messagesState) {
+//        // Прокручиваем список до последнего сообщения после загрузки
+//        if (messagesState is ChatListState.Success) {
+//            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
+//        }
+//    }
+//
+//    LaunchedEffect(firstVisibleItemIndex) {
+//        // Подгружаем более старые сообщения, если пользователь прокручивает в верхнюю часть списка
+//        if (firstVisibleItemIndex <= 1 && totalItemsCount > 0) {
+//            val firstVisibleMessage = viewModel.getFirstVisibleMessageId()
+//            viewModel.loadMoreMessages(firstVisibleMessage) {}
+//
+//        }
+//    }
+//
+//    when (messagesState) {
+//        is ChatListState.Loading -> {
+//            Box(
+//                modifier = Modifier.fillMaxSize(),
+//                contentAlignment = Alignment.Center
+//            ) {
+//                CircularProgressIndicator(
+//                    modifier = Modifier.size(40.dp),
+//                    color = MaterialTheme.colorScheme.primary
+//                )
+//            }
+//        }
+//        is ChatListState.Success -> {
+//            val chatInfo = (messagesState as ChatListState.Success).chatInfo
+//            Column(
+//                modifier = Modifier
+//                    .fillMaxSize()
+//                    .padding(8.dp)
+//            ) {
+//                LazyColumn(
+//                    modifier = Modifier
+//                        .weight(1f)
+//                        .padding(8.dp),
+//                    state = listState
+//                ) {
+//                    items(chatInfo.messages.size) { index ->
+//                        val message = chatInfo.messages[index]
+//                        Column(
+//                            modifier = Modifier
+//                                .fillMaxWidth()
+//                                .padding(8.dp)
+//                        ) {
+//                            Text(
+//                                text = "${message.from}:",
+//                                fontWeight = FontWeight.Bold,
+//                                style = MaterialTheme.typography.bodyLarge
+//                            )
+//                            Spacer(modifier = Modifier.height(4.dp))
+//
+//                            if (message.data.Text != null) {
+//                                Text(
+//                                    text = message.data.Text.text,
+//                                    style = MaterialTheme.typography.bodyMedium
+//                                )
+//                            } else if (message.data.Image != null) {
+//                                GlideImage(
+//                                    url = message.data.Image.link,
+//                                    modifier = Modifier
+//                                        .height(200.dp)
+//                                        .clickable {
+//                                            onImageClick(message.data.Image.link)
+//                                        },
+//                                    "thumb"
+//                                )
+//                            }
+//                        }
+//                    }
+//                }
+//                Divider(modifier = Modifier.padding(vertical = 8.dp))
+//                Row(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    verticalAlignment = Alignment.CenterVertically
+//                ) {
+//                    TextField(
+//                        value = messageText,
+//                        onValueChange = { messageText = it },
+//                        placeholder = { Text("Type a message...") },
+//                        modifier = Modifier
+//                            .weight(1f)
+//                            .padding(end = 8.dp)
+//                    )
+//                    Button(onClick = {
+//                        if (messageText.isNotBlank()) {
+//                            coroutineScope.launch {
+//                                viewModel.sendMessage(messageText, from = "konarparti")
+//                                messageText = "" // Очистка поля после отправки
+//                            }
+//                        }
+//                    }) {
+//                        Text("Send")
+//                    }
+//                }
+//            }
+//        }
+//        is ChatListState.Error -> {
+//            Box(
+//                modifier = Modifier.fillMaxSize(),
+//                contentAlignment = Alignment.Center
+//            ) {
+//                Text(
+//                    text = "Error: ${(messagesState as ChatListState.Error).message}",
+//                    color = MaterialTheme.colorScheme.error,
+//                    style = MaterialTheme.typography.bodyMedium
+//                )
+//            }
+//        }
+//    }
+//}
+//
+//
+//
+//
+//
+//
 @Composable
 fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {
     BackHandler(onBack = onBackPressed)
@@ -383,74 +611,6 @@ fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {
         )
     }
 }
-
-
-//@Composable
-//fun MessengerApp(viewModel: MessengerViewModel = viewModel()) {
-//    val configuration = LocalConfiguration.current
-//    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-//
-//    val chats by viewModel.chats.collectAsState()
-//    val selectedChat by viewModel.selectedChat.collectAsState()
-//
-//    if (isLandscape) {
-//        Row(modifier = Modifier.fillMaxSize()) {
-//            ChatList(chats, onChatSelected = { viewModel.selectChat(it) })
-//            selectedChat?.let { chat ->
-//                ChatScreen(
-//                    messages = viewModel.getMessagesForChat(chat),
-//                    onMessageSend = { message -> viewModel.sendMessage(chat, message) }
-//                )
-//            }
-//        }
-//    } else {
-//        if (selectedChat == null) {
-//            ChatList(chats, onChatSelected = { viewModel.selectChat(it) })
-//        } else {
-//            ChatScreen(
-//                messages = viewModel.getMessagesForChat(selectedChat!!),
-//                onMessageSend = { message -> viewModel.sendMessage(selectedChat!!, message) }
-//            )
-//        }
-//    }
-//}
-
-//@Composable
-//fun ChatList(chats: List<Chat>, onChatSelected: (Chat) -> Unit) {
-//    LazyColumn {
-//
-//        items(chats.size) { index ->
-//            val chat = chats[index]
-//            Text(chat.name, modifier = Modifier
-//                .fillMaxWidth()
-//                .clickable { onChatSelected(chat) }
-//                .padding(8.dp))
-//        }
-//    }
-//}
-
-//@Composable
-//fun ChatScreen(messages: List<Message>, onMessageSend: (String) -> Unit) {
-//    Column {
-//        LazyColumn(modifier = Modifier.weight(1f)) {
-//            items(messages.size) { index ->
-//                val message = messages[index]
-//                when {
-//                    message.text != null -> Text(message.text)
-//                    message.imageLink != null -> GlideImage(message.imageLink, )
-//                }
-//            }
-//        }
-//        TextField(
-//            value = "",
-//            onValueChange = { /* handle input */ },
-//            modifier = Modifier.fillMaxWidth()
-//        )
-//        Button(onClick = { onMessageSend("Your Message") }) {
-//            Text("Send")
-//        }
-//    }
-//}
 
 @Composable
 fun GlideImage(url: String, modifier: Modifier = Modifier, mode: String) {

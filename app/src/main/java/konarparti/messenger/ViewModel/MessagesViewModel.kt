@@ -1,7 +1,6 @@
 package konarparti.messenger.ViewModel
 
 import android.content.Context
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import konarparti.chats.Db.ChatsDatabase
@@ -9,12 +8,9 @@ import konarparti.messenger.Base.Chat
 import konarparti.messenger.Base.Data
 import konarparti.messenger.Base.Message
 import konarparti.messenger.Base.Text
-import konarparti.messenger.R
 import konarparti.messenger.Repositories.ChatRepository
 import konarparti.messenger.States.ChatListState
-import konarparti.messenger.States.ChatsState
 import konarparti.messenger.Web.SharedPreferencesHelper
-import konarparti.messenger.Web.TokenManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,7 +45,6 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         return allMessages.firstOrNull()?.id ?: 0
     }
 
-    // Метод для загрузки сообщений, начиная с последнего ID
     private suspend fun loadMessages(lastKnownId: Int, limit: Int = 20) {
         try {
             val state = repository.getMessagesFromChat(chatId, lastKnownId = lastKnownId, limit = limit, rev = true)
@@ -68,7 +63,6 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         }
     }
 
-    // Метод для отправки сообщения
     suspend fun sendMessage(text: String, from: String) {
         val message = Message(
             id = 0, // ID игнорируется сервером
@@ -84,15 +78,21 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         }
 
         if (response.isSuccessful) {
-            lastMessageId = response.body()
-            allMessages.add(message)
+            val messageId = response.body()
+            val newMessage = message.copy(id = messageId ?: 0) // Присваиваем ID с сервера, если он возвращается
+            allMessages.add(newMessage) // Добавляем сообщение в локальный список
+
+            // Обновляем состояние
             _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
+        } else {
+            _messagesState.value = ChatListState.Error("Не удалось отправить сообщение")
         }
     }
 
+
     fun loadMoreMessages(lastKnownId: Int, callBack: () -> Unit) {
         viewModelScope.launch {
-            loadMessages(lastKnownId ?: 0, limit = 20)
+           loadMessages(lastKnownId ?: 0, limit = 20)
             callBack()
         }
     }
