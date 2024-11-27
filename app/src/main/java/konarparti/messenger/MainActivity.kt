@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -33,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -214,36 +216,39 @@ fun ChatDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     var imageUrlToShow by remember { mutableStateOf<String?>(null) }
     var isImageLoading by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(false) }
 
     LaunchedEffect(chatId) {
         messagesViewModel.getFirstVisibleMessageId()
     }
 
-    LaunchedEffect(messagesState) {
-        if (messagesState is ChatListState.Success) {
-            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
+//    LaunchedEffect(messagesState) {
+//        if (messagesState is ChatListState.Success) {
+//            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
+//        }
+//    }
+
+
+// observe list scrolling
+    val reachedBottom: Boolean by remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem?.index != 0 && lastVisibleItem?.index == listState.layoutInfo.totalItemsCount - 5
         }
     }
 
+    LaunchedEffect(reachedBottom) {
+        if (reachedBottom && !isLoading) {
+            isLoading = true
+            Log.d("scroll", "loading")
+            val lastKnownId = messagesViewModel.getFirstVisibleMessageId()
+            Log.d("scroll", lastKnownId.toString())
+            messagesViewModel.loadMoreMessages(lastKnownId) {
+                isLoading = false
+            }
+        }
+    }
 
-//    val firstVisibleItemIndex = listState.firstVisibleItemIndex
-//    val totalItemsCount = listState.layoutInfo.totalItemsCount
-//    LaunchedEffect(listState.firstVisibleItemIndex) {
-//        if (firstVisibleItemIndex <= 3 && totalItemsCount > 0) {
-//            val currentState = messagesState
-//            if (currentState is ChatListState.Success) {
-//                val firstVisibleMessageId = currentState.chatInfo.messages[firstVisibleItemIndex].id
-//                val currentScrollOffset = listState.firstVisibleItemScrollOffset
-//
-//                messagesViewModel.loadMoreMessages(firstVisibleMessageId) {
-//                    coroutineScope.launch {
-//                        val newIndex = listState.firstVisibleItemIndex
-//                        listState.scrollToItem(newIndex, currentScrollOffset)
-//                    }
-//                }
-//            }
-//        }
-//    }
 
     BackHandler(enabled = true) {
         if (imageUrlToShow != null) {
@@ -273,6 +278,12 @@ fun ChatDetailScreen(
             )
             Divider()
 
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+
             when (messagesState) {
                 is ChatListState.Loading -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -283,7 +294,7 @@ fun ChatDetailScreen(
                     val messages = (messagesState as ChatListState.Success).chatInfo.messages
                     LazyColumn(
                         state = listState,
-                        reverseLayout = false,
+                        reverseLayout = true,
                         modifier = Modifier.weight(1f)
                     ) {
                         items(messages.size) { index ->

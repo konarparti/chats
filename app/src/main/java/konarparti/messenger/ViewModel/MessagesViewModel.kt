@@ -42,17 +42,17 @@ class MessagesViewModel(private val chatId: String, private val context: Context
     }
 
     fun getFirstVisibleMessageId(): Int {
-        return allMessages.firstOrNull()?.id ?: 0
+        return allMessages.lastOrNull()?.id ?: 0
     }
 
     private suspend fun loadMessages(lastKnownId: Int, limit: Int = 20) {
         try {
             val state = repository.getMessagesFromChat(chatId, lastKnownId = lastKnownId, limit = limit, rev = true)
             if (state is ChatListState.Success) {
-                val newMessages = state.chatInfo.messages.reversed()
+                val newMessages = state.chatInfo.messages
                 if (newMessages.isNotEmpty()) {
                     lastMessageId = newMessages.first().id
-                    allMessages.addAll(0, newMessages)
+                    allMessages.addAll(allMessages.size, newMessages)
                     _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
                 }
             } else if (state is ChatListState.Error) {
