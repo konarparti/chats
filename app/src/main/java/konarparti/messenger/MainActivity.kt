@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +58,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.bumptech.glide.Glide
+import konarparti.messenger.Base.Data
+import konarparti.messenger.Base.Message
 import konarparti.messenger.States.ChatListState
 import konarparti.messenger.States.ChatsState
 import konarparti.messenger.ViewModel.ChatViewModel
@@ -217,19 +220,12 @@ fun ChatDetailScreen(
     var imageUrlToShow by remember { mutableStateOf<String?>(null) }
     var isImageLoading by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+    var messages: List<Message>  by remember {  mutableStateOf (listOf()) }
 
     LaunchedEffect(chatId) {
         messagesViewModel.getFirstVisibleMessageId()
     }
 
-//    LaunchedEffect(messagesState) {
-//        if (messagesState is ChatListState.Success) {
-//            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
-//        }
-//    }
-
-
-// observe list scrolling
     val reachedBottom: Boolean by remember {
         derivedStateOf {
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
@@ -240,11 +236,10 @@ fun ChatDetailScreen(
     LaunchedEffect(reachedBottom) {
         if (reachedBottom && !isLoading) {
             isLoading = true
-            Log.d("scroll", "loading")
             val lastKnownId = messagesViewModel.getFirstVisibleMessageId()
-            Log.d("scroll", lastKnownId.toString())
             messagesViewModel.loadMoreMessages(lastKnownId) {
                 isLoading = false
+                messages = messages + it
             }
         }
     }
@@ -291,7 +286,7 @@ fun ChatDetailScreen(
                     }
                 }
                 is ChatListState.Success -> {
-                    val messages = (messagesState as ChatListState.Success).chatInfo.messages
+                    messages = (messagesState as ChatListState.Success).chatInfo.messages
                     LazyColumn(
                         state = listState,
                         reverseLayout = true,
@@ -334,6 +329,14 @@ fun ChatDetailScreen(
                         coroutineScope.launch {
                             messagesViewModel.sendMessage(text, "konarparti")
 
+                            val newMessage = Message(
+                                id = 0,
+                                from = "konarparti",
+                                to = chatId,
+                                data = Data(Text = konarparti.messenger.Base.Text(text = text)),
+                                time = System.currentTimeMillis().toString()
+                            )
+                            messages = messages + listOf(newMessage)
                         }
                     })
                 }
@@ -379,9 +382,6 @@ fun ChatInputField(onMessageSend: (String) -> Unit) {
         }
     }
 }
-
-
-//***
 
 @Composable
 fun LoginScreen(
@@ -435,175 +435,6 @@ fun LoginScreen(
     }
 }
 
-//@Composable
-//fun ChatListScreen(viewModel: ChatViewModel, onChatClick: (id: String) -> Unit) {
-//    val chatListState = viewModel.chatListState.collectAsState()
-//
-//    when (val state = chatListState.value) {
-//        is ChatsState.Loading -> {
-//            CircularProgressIndicator()
-//        }
-//        is ChatsState.Success -> {
-//            // Отображаем список чатов
-//            LazyColumn(modifier = Modifier.fillMaxSize()) {
-//                items(state.chats.size) { index ->
-//                    val chat = state.chats[index]
-//                    Row {
-//                        Text(
-//                            text = chat,
-//                            fontSize = 20.sp,
-//                            modifier = Modifier
-//                                .weight(9f)
-//                                .clickable {
-//                                    onChatClick(chat)
-//                                }
-//                                .padding(8.dp)
-//
-//                        )
-//                    }
-//
-//                }
-//            }
-//        }
-//        is ChatsState.Error -> {
-//            // Ошибка при получении чатов
-//            Text("Error: ${state.message}")
-//        }
-//    }
-//
-//}
-//
-//@Composable
-//fun MessagesScreen(viewModel: MessagesViewModel, onImageClick: (String) -> Unit) {
-//    val messagesState by viewModel.messagesState.collectAsState()
-//    val listState = rememberLazyListState()
-//    var messageText by remember { mutableStateOf("") }
-//    val coroutineScope = rememberCoroutineScope()
-//
-//    // Отслеживаем прокрутку и загружаем старые сообщения
-//    val firstVisibleItemIndex = listState.firstVisibleItemIndex
-//    val totalItemsCount = listState.layoutInfo.totalItemsCount
-//
-//    LaunchedEffect(messagesState) {
-//        // Прокручиваем список до последнего сообщения после загрузки
-//        if (messagesState is ChatListState.Success) {
-//            listState.scrollToItem((messagesState as ChatListState.Success).chatInfo.messages.size - 1)
-//        }
-//    }
-//
-//    LaunchedEffect(firstVisibleItemIndex) {
-//        // Подгружаем более старые сообщения, если пользователь прокручивает в верхнюю часть списка
-//        if (firstVisibleItemIndex <= 1 && totalItemsCount > 0) {
-//            val firstVisibleMessage = viewModel.getFirstVisibleMessageId()
-//            viewModel.loadMoreMessages(firstVisibleMessage) {}
-//
-//        }
-//    }
-//
-//    when (messagesState) {
-//        is ChatListState.Loading -> {
-//            Box(
-//                modifier = Modifier.fillMaxSize(),
-//                contentAlignment = Alignment.Center
-//            ) {
-//                CircularProgressIndicator(
-//                    modifier = Modifier.size(40.dp),
-//                    color = MaterialTheme.colorScheme.primary
-//                )
-//            }
-//        }
-//        is ChatListState.Success -> {
-//            val chatInfo = (messagesState as ChatListState.Success).chatInfo
-//            Column(
-//                modifier = Modifier
-//                    .fillMaxSize()
-//                    .padding(8.dp)
-//            ) {
-//                LazyColumn(
-//                    modifier = Modifier
-//                        .weight(1f)
-//                        .padding(8.dp),
-//                    state = listState
-//                ) {
-//                    items(chatInfo.messages.size) { index ->
-//                        val message = chatInfo.messages[index]
-//                        Column(
-//                            modifier = Modifier
-//                                .fillMaxWidth()
-//                                .padding(8.dp)
-//                        ) {
-//                            Text(
-//                                text = "${message.from}:",
-//                                fontWeight = FontWeight.Bold,
-//                                style = MaterialTheme.typography.bodyLarge
-//                            )
-//                            Spacer(modifier = Modifier.height(4.dp))
-//
-//                            if (message.data.Text != null) {
-//                                Text(
-//                                    text = message.data.Text.text,
-//                                    style = MaterialTheme.typography.bodyMedium
-//                                )
-//                            } else if (message.data.Image != null) {
-//                                GlideImage(
-//                                    url = message.data.Image.link,
-//                                    modifier = Modifier
-//                                        .height(200.dp)
-//                                        .clickable {
-//                                            onImageClick(message.data.Image.link)
-//                                        },
-//                                    "thumb"
-//                                )
-//                            }
-//                        }
-//                    }
-//                }
-//                Divider(modifier = Modifier.padding(vertical = 8.dp))
-//                Row(
-//                    modifier = Modifier.fillMaxWidth(),
-//                    verticalAlignment = Alignment.CenterVertically
-//                ) {
-//                    TextField(
-//                        value = messageText,
-//                        onValueChange = { messageText = it },
-//                        placeholder = { Text("Type a message...") },
-//                        modifier = Modifier
-//                            .weight(1f)
-//                            .padding(end = 8.dp)
-//                    )
-//                    Button(onClick = {
-//                        if (messageText.isNotBlank()) {
-//                            coroutineScope.launch {
-//                                viewModel.sendMessage(messageText, from = "konarparti")
-//                                messageText = "" // Очистка поля после отправки
-//                            }
-//                        }
-//                    }) {
-//                        Text("Send")
-//                    }
-//                }
-//            }
-//        }
-//        is ChatListState.Error -> {
-//            Box(
-//                modifier = Modifier.fillMaxSize(),
-//                contentAlignment = Alignment.Center
-//            ) {
-//                Text(
-//                    text = "Error: ${(messagesState as ChatListState.Error).message}",
-//                    color = MaterialTheme.colorScheme.error,
-//                    style = MaterialTheme.typography.bodyMedium
-//                )
-//            }
-//        }
-//    }
-//}
-//
-//
-//
-//
-//
-//
 @Composable
 fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {
     BackHandler(onBack = onBackPressed)
@@ -639,6 +470,3 @@ fun GlideImage(url: String, modifier: Modifier = Modifier, mode: String) {
         modifier = modifier
     )
 }
-
-
-

@@ -1,6 +1,7 @@
 package konarparti.messenger.ViewModel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import konarparti.chats.Db.ChatsDatabase
@@ -20,7 +21,6 @@ import kotlinx.coroutines.withContext
 class MessagesViewModel(private val chatId: String, private val context: Context) : ViewModel() {
 
     private val repository = ChatRepository(ChatsDatabase.getDatabase(context).chatsDAO())
-    private var lastMessageId: Int? = null // ID последнего загруженного сообщения
     private var allMessages: MutableList<Message> = mutableListOf() // Все сообщения
 
     private val _messagesState = MutableStateFlow<ChatListState>(ChatListState.Loading)
@@ -45,15 +45,15 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         return allMessages.lastOrNull()?.id ?: 0
     }
 
-    private suspend fun loadMessages(lastKnownId: Int, limit: Int = 20) {
+    private suspend fun loadMessages(lastKnownId: Int, limit: Int = 20) : List<Message> {
         try {
             val state = repository.getMessagesFromChat(chatId, lastKnownId = lastKnownId, limit = limit, rev = true)
             if (state is ChatListState.Success) {
                 val newMessages = state.chatInfo.messages
                 if (newMessages.isNotEmpty()) {
-                    lastMessageId = newMessages.first().id
                     allMessages.addAll(allMessages.size, newMessages)
                     _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
+                    return newMessages
                 }
             } else if (state is ChatListState.Error) {
                 _messagesState.value = ChatListState.Error(state.message ?: "Unknown Error")
@@ -61,6 +61,7 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         } catch (e: Exception) {
             _messagesState.value = ChatListState.Error(e.message ?: "Unknown Error")
         }
+        return emptyList()
     }
 
     suspend fun sendMessage(text: String, from: String) {
@@ -79,8 +80,8 @@ class MessagesViewModel(private val chatId: String, private val context: Context
 
         if (response.isSuccessful) {
             val messageId = response.body()
-            val newMessage = message.copy(id = messageId ?: 0) // Присваиваем ID с сервера, если он возвращается
-            allMessages.add(newMessage) // Добавляем сообщение в локальный список
+            val newMessage = message.copy(id = messageId ?: 0)
+            allMessages.add(0, newMessage)
 
             // Обновляем состояние
             _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
@@ -90,12 +91,15 @@ class MessagesViewModel(private val chatId: String, private val context: Context
     }
 
 
-    fun loadMoreMessages(lastKnownId: Int, callBack: () -> Unit) {
+    fun loadMoreMessages(lastKnownId: Int, callBack: (List<Message>) -> Unit) {
         viewModelScope.launch {
-           loadMessages(lastKnownId ?: 0, limit = 20)
-            callBack()
+            val list = loadMessages(lastKnownId ?: 0, limit = 20)
+            callBack(list)
+
         }
+
     }
+
 }
 
 
