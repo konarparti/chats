@@ -9,6 +9,7 @@ import konarparti.messenger.Base.Chat
 import konarparti.messenger.Base.Data
 import konarparti.messenger.Base.Message
 import konarparti.messenger.Base.Text
+import konarparti.messenger.R
 import konarparti.messenger.Repositories.ChatRepository
 import konarparti.messenger.States.ChatListState
 import konarparti.messenger.Web.SharedPreferencesHelper
@@ -36,7 +37,7 @@ class MessagesViewModel(private val chatId: String, private val context: Context
                 val lastKnownId = repository.getLastMessageId(chatId) ?: 0
                 loadMessages(lastKnownId + 1)
             } catch (e: Exception) {
-                _messagesState.value = ChatListState.Error("Failed to load messages")
+                _messagesState.value = ChatListState.Error(context.getString(R.string.failed_to_load_messages))
             }
         }
     }
@@ -56,10 +57,10 @@ class MessagesViewModel(private val chatId: String, private val context: Context
                     return newMessages
                 }
             } else if (state is ChatListState.Error) {
-                _messagesState.value = ChatListState.Error(state.message ?: "Unknown Error")
+                _messagesState.value = ChatListState.Error(state.message ?: context.getString(R.string.unknown_error))
             }
         } catch (e: Exception) {
-            _messagesState.value = ChatListState.Error(e.message ?: "Unknown Error")
+            _messagesState.value = ChatListState.Error(e.message ?: context.getString(R.string.unknown_error))
         }
         return emptyList()
     }

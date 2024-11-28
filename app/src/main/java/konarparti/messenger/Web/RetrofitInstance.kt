@@ -20,7 +20,6 @@ object RetrofitInstance {
 
     fun initialize(context: Context) {
         tokenManager = TokenManager(context)
-        Log.d("token", "TokenManager initialized")
     }
 
     private const val BASE_URL = "https://faerytea.name:8008/"

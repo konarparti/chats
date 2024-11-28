@@ -10,7 +10,6 @@ import konarparti.messenger.Base.Resource
 import konarparti.messenger.R
 import konarparti.messenger.States.ChatListState
 import konarparti.messenger.States.ChatsState
-import konarparti.messenger.Web.TokenManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Response

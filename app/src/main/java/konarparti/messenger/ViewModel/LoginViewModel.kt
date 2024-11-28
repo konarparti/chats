@@ -11,6 +11,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import androidx.lifecycle.ViewModel
 import konarparti.messenger.MainActivity
+import konarparti.messenger.R
 import konarparti.messenger.Web.SharedPreferencesHelper
 
 class LoginViewModel(private val tokenManager: TokenManager, application: MainActivity) : ViewModel() {
@@ -29,16 +30,16 @@ class LoginViewModel(private val tokenManager: TokenManager, application: MainAc
                     SharedPreferencesHelper.saveToken(context, response)
                     _uiState.value = LoginUiState.Success
                 } else {
-                    val errorMessage = "Invalid credentials"
+                    val errorMessage = context.getString(R.string.invalid_credentials)
                     _uiState.value = LoginUiState.Error(errorMessage)
                 }
             } catch (e: IOException) {
-                _uiState.value = LoginUiState.Error("Network error")
+                _uiState.value = LoginUiState.Error(context.getString(R.string.network_error))
             } catch (e: HttpException) {
                 if(e.code() == 401)
-                    _uiState.value = LoginUiState.Error("Invalid credentials")
+                    _uiState.value = LoginUiState.Error(context.getString(R.string.invalid_credentials))
                 else
-                    _uiState.value = LoginUiState.Error("Server error")
+                    _uiState.value = LoginUiState.Error(context.getString(R.string.server_error))
             }
         }
     }

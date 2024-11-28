@@ -2,9 +2,7 @@ package konarparti.messenger
 
 import android.content.Context
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.widget.ImageView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -19,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -27,17 +24,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,17 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.viewModelScope
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.bumptech.glide.Glide
 import konarparti.messenger.Base.Data
 import konarparti.messenger.Base.Message
@@ -66,7 +53,6 @@ import konarparti.messenger.ViewModel.ChatViewModel
 import konarparti.messenger.ViewModel.LoginUiState
 import konarparti.messenger.ViewModel.LoginViewModel
 import konarparti.messenger.ViewModel.MessagesViewModel
-import konarparti.messenger.Web.RetrofitInstance
 import konarparti.messenger.Web.SharedPreferencesHelper
 import konarparti.messenger.Web.TokenManager
 import kotlinx.coroutines.launch
@@ -146,10 +132,10 @@ fun ResponsiveChatScreen(
                 onChatClick = onChatSelected
             )
             if (selectedChatId != null) {
-                ChatDetailScreen(chatId = selectedChatId, modifier = Modifier.weight(1f), context)
+                ChatDetailScreen(chatId = selectedChatId, modifier = Modifier.weight(1f), context, onBack = onBack)
             } else {
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text("Выберите чат", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.choose_chat), style = MaterialTheme.typography.bodyLarge)
                 }
             }
         }
@@ -200,7 +186,7 @@ fun ChatListScreen(
         }
         is ChatsState.Error -> {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Ошибка: ${chatListState.message}", color = MaterialTheme.colorScheme.error)
+                Text(stringResource(R.string.error, chatListState.message?: ""), color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -319,7 +305,7 @@ fun ChatDetailScreen(
                                             .clickable {
                                                 imageUrlToShow = message.data.Image.link
                                             },
-                                        "thumb"
+                                        context.getString(R.string.thumb_mode)
                                     )
                                 }
                             }
@@ -343,7 +329,7 @@ fun ChatDetailScreen(
                 is ChatListState.Error -> {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "Ошибка загрузки сообщений",
+                            text = stringResource(R.string.error_loading_messages),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -366,7 +352,7 @@ fun ChatInputField(onMessageSend: (String) -> Unit) {
         TextField(
             value = text,
             onValueChange = { text = it },
-            placeholder = { Text("Введите сообщение...") },
+            placeholder = { Text(stringResource(R.string.type_your_message)) },
             modifier = Modifier.weight(1f)
         )
         Button(
@@ -378,7 +364,7 @@ fun ChatInputField(onMessageSend: (String) -> Unit) {
             },
             modifier = Modifier.padding(start = 8.dp)
         ) {
-            Text("Отправить")
+            Text(stringResource(R.string.send))
         }
     }
 }
@@ -403,14 +389,14 @@ fun LoginScreen(
         TextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("Username") },
+            label = { Text(stringResource(R.string.username)) },
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(modifier = Modifier.height(16.dp))
         TextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("Password") },
+            label = { Text(stringResource(R.string.password)) },
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth()
         )
@@ -419,7 +405,7 @@ fun LoginScreen(
             onClick = { viewModel.login(name, password) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Login")
+            Text(stringResource(R.string.login))
         }
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -432,25 +418,6 @@ fun LoginScreen(
             is LoginUiState.Success -> onLoginSuccess()
             else -> {}
         }
-    }
-}
-
-@Composable
-fun ImageViewScreen(imageUrl: String, onBackPressed: () -> Unit) {
-    BackHandler(onBack = onBackPressed)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        GlideImage(
-            url = imageUrl,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            "img"
-        )
     }
 }
 

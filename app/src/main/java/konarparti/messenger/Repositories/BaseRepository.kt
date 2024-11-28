@@ -14,7 +14,6 @@ open class BaseRepository {
             try {
                 Resource.Success(callback())
             } catch (e: Throwable) {
-                Log.d("api", e.message.toString())
                 Resource.Error(e.message!!)
             }
         }

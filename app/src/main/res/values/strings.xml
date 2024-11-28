@@ -6,4 +6,17 @@
     <string name="img">https://faerytea.name:8008/img/%1$s</string>
     <string name="thumb_mode">thumb</string>
     <string name="img_mode">img</string>
+    <string name="choose_chat">Choose chat</string>
+    <string name="error">Error: %1$s</string>
+    <string name="error_loading_messages">Error loading messages</string>
+    <string name="type_your_message">Type your message...</string>
+    <string name="send">Send</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="login">Login</string>
+    <string name="unknown_error">Unknown Error</string>
+    <string name="failed_to_load_messages">Failed to load messages</string>
+    <string name="invalid_credentials">Invalid credentials</string>
+    <string name="network_error">Network error</string>
+    <string name="server_error">Server error</string>
 </resources>
