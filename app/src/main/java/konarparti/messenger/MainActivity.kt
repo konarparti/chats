@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
 import android.widget.ImageView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -313,11 +314,18 @@ fun ChatDetailScreen(
                     }
                     ChatInputField(onMessageSend = { text ->
                         coroutineScope.launch {
-                            messagesViewModel.sendMessage(text, "konarparti")
+                            val from = SharedPreferencesHelper.getLogin(context)
+
+                            if(from == null){
+                                Toast.makeText(context,
+                                    context.getString(R.string.error_with_login), Toast.LENGTH_SHORT).show()
+                                return@launch
+                            }
+                            messagesViewModel.sendMessage(text, from)
 
                             val newMessage = Message(
                                 id = 0,
-                                from = "konarparti",
+                                from = from,
                                 to = chatId,
                                 data = Data(Text = konarparti.messenger.Base.Text(text = text)),
                                 time = System.currentTimeMillis().toString()

@@ -93,7 +93,7 @@ class MessagesViewModel(private val chatId: String, private val context: Context
             // Обновляем состояние
             _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
         } else {
-            _messagesState.value = ChatListState.Error("Не удалось отправить сообщение")
+            _messagesState.value = ChatListState.Error(context.getString(R.string.error_while_sending_message))
         }
     }
 

@@ -28,6 +28,7 @@ class LoginViewModel(private val tokenManager: TokenManager, application: MainAc
                 if (response != "") {
                     tokenManager.saveToken(response)
                     SharedPreferencesHelper.saveToken(context, response)
+                    SharedPreferencesHelper.setLogin(context, name)
                     _uiState.value = LoginUiState.Success
                 } else {
                     val errorMessage = context.getString(R.string.invalid_credentials)
