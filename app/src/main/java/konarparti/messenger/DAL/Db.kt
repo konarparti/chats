@@ -5,10 +5,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import konarparti.messenger.DAL.ChatDAO
+import konarparti.messenger.DAL.MessageDao
+import konarparti.messenger.DAL.MessageEntity
 
-@Database(entities = [ChatEntity::class], version = 1)
+@Database(entities = [ChatEntity::class, MessageEntity::class], version = 2)
 abstract class ChatsDatabase : RoomDatabase() {
     abstract fun chatsDAO(): ChatDAO
+    abstract fun messagesDAO(): MessageDao
 
     companion object {
         @Volatile
@@ -27,7 +30,7 @@ abstract class ChatsDatabase : RoomDatabase() {
             return Room.databaseBuilder(
                 context.applicationContext,
                 ChatsDatabase::class.java,
-                "chats"
+                "konarpartiChats",
             ).build()
         }
     }

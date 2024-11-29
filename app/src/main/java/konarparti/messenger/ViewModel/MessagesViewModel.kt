@@ -21,7 +21,7 @@ import kotlinx.coroutines.withContext
 
 class MessagesViewModel(private val chatId: String, private val context: Context) : ViewModel() {
 
-    private val repository = ChatRepository(ChatsDatabase.getDatabase(context).chatsDAO())
+    private val repository = ChatRepository(ChatsDatabase.getDatabase(context).chatsDAO(), ChatsDatabase.getDatabase(context).messagesDAO())
     private var allMessages: MutableList<Message> = mutableListOf() // Все сообщения
 
     private val _messagesState = MutableStateFlow<ChatListState>(ChatListState.Loading)
@@ -57,7 +57,13 @@ class MessagesViewModel(private val chatId: String, private val context: Context
                     return newMessages
                 }
             } else if (state is ChatListState.Error) {
-                _messagesState.value = ChatListState.Error(state.message ?: context.getString(R.string.unknown_error))
+                if(allMessages.none { m -> m.id == lastKnownId}){
+                    val mes = repository.getMessagesFromDatabase(chatId)
+                    allMessages.addAll(allMessages.size, mes?: emptyList())
+                    _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
+                    return mes?: emptyList()
+                }
+
             }
         } catch (e: Exception) {
             _messagesState.value = ChatListState.Error(e.message ?: context.getString(R.string.unknown_error))

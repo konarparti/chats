@@ -63,6 +63,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx.v250)
     kapt(libs.androidx.room.compiler)
+    implementation(libs.androidx.room.testing)
 
 
     // Retrofit

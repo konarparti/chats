@@ -2,15 +2,16 @@ package konarparti.messenger.DAL
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import kotlinx.coroutines.flow.Flow
+
 
 @Dao
 interface MessageDao {
 
-    @Insert
-    suspend fun insertMessages(messages: List<Message>)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertMessages(message: MessageEntity)
 
-    @Query("SELECT * FROM Message WHERE chatName = :chatName")
-    fun getMessages(chatName: String): Flow<List<Message>>
+    @Query("SELECT * FROM messages WHERE chatName = :chatName ORDER BY id DESC")
+    fun getMessages(chatName: String): List<MessageEntity>
 }

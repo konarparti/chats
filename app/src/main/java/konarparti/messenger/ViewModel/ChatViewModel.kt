@@ -7,14 +7,13 @@ import konarparti.chats.Db.ChatsDatabase
 import konarparti.messenger.R
 import konarparti.messenger.Repositories.ChatRepository
 import konarparti.messenger.States.ChatsState
-import konarparti.messenger.Web.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class ChatViewModel(private val context: Context) : ViewModel() {
 
-    private val repository = ChatRepository(ChatsDatabase.getDatabase(context).chatsDAO())
+    private val repository = ChatRepository(ChatsDatabase.getDatabase(context).chatsDAO(), ChatsDatabase.getDatabase(context).messagesDAO())
 
     private val _chatListState = MutableStateFlow<ChatsState>(ChatsState.Loading)
     val chatListState: StateFlow<ChatsState> = _chatListState
@@ -25,7 +24,7 @@ class ChatViewModel(private val context: Context) : ViewModel() {
             try {
                 when(val chatState = repository.getChats()){
                     is ChatsState.Error -> {
-                        val chats = repository.getMessagesFromDataBase()
+                        val chats = repository.getChatsFromDataBase()
                         _chatListState.value = ChatsState.Success(chats!!)
                     }
                     is ChatsState.Success ->  _chatListState.value = chatState
