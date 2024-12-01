@@ -109,4 +109,19 @@ class ChatRepository(private val database: ChatDAO? = null, private val database
     suspend fun sendMessage(token: String, message: Message): Response<Int> {
         return api.sendMessage(token, message)
     }
+
+    suspend fun saveSentMessage(message: Message){
+        return withContext(Dispatchers.IO) {
+            databaseMessage?.insertMessages(
+                MessageEntity(
+                    message.id,
+                    message.to,
+                    message.from,
+                    message.to,
+                    message.data.Text?.text,
+                    message.data.Image?.link,
+                    message.time)
+            )
+        }
+    }
 }

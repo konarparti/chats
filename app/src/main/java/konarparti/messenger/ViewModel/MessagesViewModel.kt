@@ -88,6 +88,9 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         if (response.isSuccessful) {
             val messageId = response.body()
             val newMessage = message.copy(id = messageId ?: 0)
+
+            repository.saveSentMessage(newMessage)
+
             allMessages.add(0, newMessage)
 
             // Обновляем состояние
