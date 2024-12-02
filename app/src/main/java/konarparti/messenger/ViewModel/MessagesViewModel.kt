@@ -71,7 +71,7 @@ class MessagesViewModel(private val chatId: String, private val context: Context
         return emptyList()
     }
 
-    suspend fun sendMessage(text: String, from: String) {
+    suspend fun sendMessage(text: String, from: String) : ChatListState {
         val message = Message(
             id = 0, // ID игнорируется сервером
             from = from,
@@ -80,24 +80,32 @@ class MessagesViewModel(private val chatId: String, private val context: Context
             time = System.currentTimeMillis().toString()
         )
 
-        val response = withContext(Dispatchers.IO) {
-            val token = SharedPreferencesHelper.getToken(context)
-            repository.sendMessage(token!!, message)
+        try{
+            val response = withContext(Dispatchers.IO) {
+                val token = SharedPreferencesHelper.getToken(context)
+                repository.sendMessage(token!!, message)
+            }
+
+            if (response.isSuccessful) {
+                val messageId = response.body()
+                val newMessage = message.copy(id = messageId ?: 0)
+
+                repository.saveSentMessage(newMessage)
+
+                //allMessages.add(0, newMessage)
+
+                // Обновляем состояние
+                _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
+            } else {
+                _messagesState.value = ChatListState.Error(context.getString(R.string.error_while_sending_message))
+            }
+            return _messagesState.value
         }
-
-        if (response.isSuccessful) {
-            val messageId = response.body()
-            val newMessage = message.copy(id = messageId ?: 0)
-
-            repository.saveSentMessage(newMessage)
-
-            allMessages.add(0, newMessage)
-
-            // Обновляем состояние
-            _messagesState.value = ChatListState.Success(Chat(chatId, allMessages))
-        } else {
+        catch (e: Exception){
             _messagesState.value = ChatListState.Error(context.getString(R.string.error_while_sending_message))
+            return _messagesState.value
         }
+
     }
 
 

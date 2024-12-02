@@ -22,4 +22,12 @@
     <string name="error_with_login">Error with login, try sign in again</string>
     <string name="error_while_sending_message">Error while sending message</string>
     <string name="token_expired_try_sign_in_again">Token expired, try sign in again</string>
+    <string name="create_chat">Create chat</string>
+    <string name="enter_chat_name">Enter chat name</string>
+    <string name="type_chat_name">Type chat name</string>
+    <string name="cancel">Cancel</string>
+    <string name="create">Create</string>
+    <string name="created_chat_event">%1$s создал чат %2$s</string>
+    <string name="error_while_creating_chat">Error while creating chat. Possible chat already exists</string>
+    <string name="logout">Logout</string>
 </resources>

@@ -14,6 +14,7 @@ import konarparti.messenger.DAL.MessageEntity
 import konarparti.messenger.R
 import konarparti.messenger.States.ChatListState
 import konarparti.messenger.States.ChatsState
+import konarparti.messenger.Web.SharedPreferencesHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Response
@@ -124,4 +125,32 @@ class ChatRepository(private val database: ChatDAO? = null, private val database
             )
         }
     }
+
+    suspend fun createChat(chatName: String, username: String, messageText: String, token: String): Boolean {
+        when(val chats = getChats()){
+            is ChatsState.Success -> {
+                if(chats.chats.contains("$chatName@channel")){
+                    return false
+                }
+            }
+            is ChatsState.Error -> return false
+            ChatsState.Loading -> TODO()
+        }
+
+
+        return try {
+            val initialMessage = Message(
+                id = 0,
+                from = username,
+                to = "$chatName@channel",
+                data = Data(Text = Text(messageText)),
+                time = System.currentTimeMillis().toString()
+            )
+            val response = sendMessage(token, initialMessage)
+            response.isSuccessful
+        } catch (e: Exception) {
+            false
+        }
+    }
+
 }

@@ -3,12 +3,14 @@ package konarparti.messenger
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,6 +83,7 @@ class MainActivity : ComponentActivity() {
 
             MaterialTheme {
                 if (!isLoggedIn) {
+                    Log.d("123", isLoggedIn.toString())
                     LoginScreen(viewModel = loginViewModel) {
                         isLoggedIn = true
                         chatViewModel.loadChats()
@@ -91,7 +94,7 @@ class MainActivity : ComponentActivity() {
                     }
                     val chatListState = chatViewModel.chatListState.collectAsState()
 
-                    BackHandler(enabled = true) {
+                    BackHandler() {
                         when {
                             selectedChatId != null -> {
                                 selectedChatId = null
@@ -112,6 +115,23 @@ class MainActivity : ComponentActivity() {
                             selectedChatId = chatId
                         },
                         context = context,
+                        onCreateChat = { chatName ->
+                            chatViewModel.createChat(
+                                chatName = chatName,
+                                onSuccess = { selectedChatId = it },
+                                onError = { error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show() }
+                            )
+                        },
+                        onLogoutClick = {
+                            selectedChatId = null
+                            loginViewModel.logout()
+                            chatViewModel.resetState()
+                            SharedPreferencesHelper.clearToken(context)
+                            Log.d("1", SharedPreferencesHelper.getToken(context).toString())
+                            Log.d("1", isLoggedIn.toString())
+                            isLoggedIn = false
+                            Log.d("1", isLoggedIn.toString())
+                        },
                         onBack = {
                             selectedChatId = null
                         }
@@ -128,11 +148,15 @@ fun ResponsiveChatScreen(
     selectedChatId: String?,
     onChatSelected: (String) -> Unit,
     context: Context,
+    onCreateChat: (String) -> Unit,
+    onLogoutClick: () -> Unit,
     onBack: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     var imageUrlToShow by remember { mutableStateOf<String?>(null) }
+    var showCreateChatDialog by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (imageUrlToShow != null) {
             Box(
@@ -152,6 +176,8 @@ fun ResponsiveChatScreen(
                     ChatListScreen(
                         chatListState = chatListState,
                         modifier = Modifier.width(300.dp),
+                        onCreateChat = { showCreateChatDialog = true },
+                        onLogoutClick = onLogoutClick,
                         onChatClick = onChatSelected
                     )
                     if (selectedChatId != null) {
@@ -173,6 +199,8 @@ fun ResponsiveChatScreen(
                     ChatListScreen(
                         chatListState = chatListState,
                         modifier = Modifier.fillMaxSize(),
+                        onCreateChat = { showCreateChatDialog = true },
+                        onLogoutClick = onLogoutClick,
                         onChatClick = onChatSelected
                     )
                 } else {
@@ -184,6 +212,15 @@ fun ResponsiveChatScreen(
                         onImageOpen = { imageUrl -> imageUrlToShow = imageUrl }
                     )
                 }
+            }
+            if (showCreateChatDialog) {
+                CreateChatDialog(
+                    onDismiss = { showCreateChatDialog = false },
+                    onCreate = { chatName ->
+                        showCreateChatDialog = false
+                        onCreateChat(chatName)
+                    }
+                )
             }
         }
     }
@@ -197,10 +234,67 @@ fun ResponsiveChatScreen(
 }
 
 @Composable
+fun CreateChatDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    var chatName by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(16.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.enter_chat_name),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            TextField(
+                value = chatName,
+                onValueChange = { chatName = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text(stringResource(R.string.type_chat_name)) }
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Button(onClick = onDismiss) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = {
+                        if (chatName.isNotBlank()) {
+                            onCreate(chatName)
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.create))
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
 fun ChatListScreen(
     chatListState: ChatsState,
     modifier: Modifier = Modifier,
-    onChatClick: (String) -> Unit
+    onCreateChat: () -> Unit,
+    onLogoutClick: () -> Unit,
+    onChatClick: (String) -> Unit,
 ) {
     when (chatListState) {
         is ChatsState.Loading -> {
@@ -209,19 +303,44 @@ fun ChatListScreen(
             }
         }
         is ChatsState.Success -> {
-            LazyColumn(modifier) {
-                items(chatListState.chats.size) { index ->
-                    val chat = chatListState.chats[index]
-                    Text(
-                        text = chat,
+            Column {
+                Row (Modifier.width(300.dp)){
+                    Button(
+                        onClick = onCreateChat,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onChatClick(chat) }
-                            .padding(16.dp),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
+                            .weight(5f)
+                            .padding(8.dp)
+                    ) {
+                        Text(stringResource(R.string.create_chat))
+                    }
+                    Button(
+                        onClick = onLogoutClick ,
+                        modifier = Modifier
+                            .weight(5f)
+                            .padding(8.dp)
+                    ) {
+                        Text(stringResource(R.string.logout))
+
+                    }
+
+                }
+
+                LazyColumn(modifier) {
+                    items(chatListState.chats.size) { index ->
+                        val chat = chatListState.chats[index]
+                        Text(
+                            text = chat,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onChatClick(chat) }
+                                .padding(16.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
                 }
             }
+
+
         }
         is ChatsState.Error -> {
             Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -347,18 +466,27 @@ fun ChatDetailScreen(
                                 context.getString(R.string.error_with_login), Toast.LENGTH_SHORT).show()
                             return@launch
                         }
-                        messagesViewModel.sendMessage(text, from)
+                        when (val result = messagesViewModel.sendMessage(text, from)){
+                            is ChatListState.Success -> {
+                                val newMessage = Message(
+                                    id = 0,
+                                    from = from,
+                                    to = chatId,
+                                    data = Data(Text = konarparti.messenger.Base.Text(text = text)),
+                                    time = System.currentTimeMillis().toString()
+                                )
+                                messages = listOf(newMessage) + messages
 
-                        val newMessage = Message(
-                            id = 0,
-                            from = from,
-                            to = chatId,
-                            data = Data(Text = konarparti.messenger.Base.Text(text = text)),
-                            time = System.currentTimeMillis().toString()
-                        )
-                        messages = messages + listOf(newMessage)
+                                listState.animateScrollToItem(0)
+                            }
 
-                        listState.animateScrollToItem(0)
+                            is ChatListState.Error -> {
+                                Toast.makeText(context, result.message.toString(), Toast.LENGTH_LONG).show()
+                            }
+                            ChatListState.Loading -> TODO()
+                        }
+
+
                     }
                 })
             }
@@ -381,7 +509,9 @@ fun OpenImage(imageUrlToShow: String, onClose: () -> Unit){
         onClose()
     }
 
-    Box(modifier = Modifier.fillMaxSize().zIndex(10f), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .zIndex(10f), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
 
         GlideImage(
@@ -454,12 +584,14 @@ fun LoginScreen(
             keyboardActions = KeyboardActions(
                 onDone = { focusManager.moveFocus(FocusDirection.Next) }
             ),
-            modifier = Modifier.fillMaxWidth().onKeyEvent {
-                if (it.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER || it.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_TAB) {
-                    focusManager.moveFocus(FocusDirection.Next)
+            modifier = Modifier
+                .fillMaxWidth()
+                .onKeyEvent {
+                    if (it.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_ENTER || it.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_TAB) {
+                        focusManager.moveFocus(FocusDirection.Next)
+                    }
+                    false
                 }
-                false
-            }
         )
         Spacer(modifier = Modifier.height(16.dp))
         TextField(

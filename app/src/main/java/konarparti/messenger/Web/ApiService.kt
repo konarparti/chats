@@ -26,13 +26,6 @@ interface ApiService {
     @GET("/channels")
     suspend fun getChannels(): List<String>
 
-    @POST("messages")
-    @Headers("Content-Type: application/json;charset=UTF-8")
-    suspend fun createChat(
-        @Header("X-Auth-Token") token: String,
-        @Body request: String,
-    )
-
     @POST("/messages")
     @Headers("Content-Type: application/json;charset=UTF-8")
     suspend fun sendMessage(

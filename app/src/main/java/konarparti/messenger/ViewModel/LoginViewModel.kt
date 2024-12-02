@@ -47,6 +47,7 @@ class LoginViewModel(private val tokenManager: TokenManager, application: MainAc
 
     fun logout() {
         viewModelScope.launch{
+            _uiState.value = LoginUiState.Idle
             tokenManager.clearToken()
             SharedPreferencesHelper.clearToken(context)
         }
